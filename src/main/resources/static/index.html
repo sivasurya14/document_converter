@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PDF to Excel Converter</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 500px;
+      margin: 40px auto;
+    }
+    h2 {
+      text-align: center;
+    }
+    input[type="file"] {
+      width: 100%;
+      padding: 10px;
+    }
+    button {
+      padding: 10px 20px;
+      margin-top: 10px;
+      width: 100%;
+      font-size: 16px;
+      background: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    #message {
+      margin-top: 10px;
+      text-align: center;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h2>📁 Upload PDFs → 📊 Get Excel</h2>
+  <form id="uploadForm">
+    <input type="file" id="pdfFiles" name="files" accept=".pdf" multiple required />
+    <button type="submit">Convert & Download Excel</button>
+    <p id="message"></p>
+  </form>
+
+  <script>
+    const form = document.getElementById('uploadForm');
+    const message = document.getElementById('message');
+
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      message.textContent = 'Uploading... please wait';
+
+      const files = document.getElementById('pdfFiles').files;
+      const formData = new FormData();
+
+      for (let file of files) {
+        formData.append('files', file);
+      }
+
+      try {
+        const response = await fetch('https://0a1c3c78a51f.ngrok-free.app/uploadfile', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error('Conversion failed. Please try again.');
+        }
+
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = 'final_sheet.xlsx';
+        a.click();
+
+        message.textContent = '✅ Conversion successful. Excel downloaded!';
+      } catch (err) {
+        console.error(err);
+        message.textContent = '❌ Failed to convert PDF. Check console for errors.';
+      }
+    });
+  </script>
+</body>
+</html>
