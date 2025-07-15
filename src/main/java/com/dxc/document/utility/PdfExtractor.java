@@ -42,7 +42,7 @@ public class PdfExtractor {
             data.put("JOB TITLE", extractLineValue(fullText, "JOB TITLE:"));
             data.put("REPORTS TO", extractLineValue(fullText, "REPORTS TO:"));
             data.put("DIVISION", extractLineValue(fullText, "DIVISION/BUSINESS LINE:"));
-            data.put("VERSION DATE", extractLineValue(fullText, "SUB DIVISION:"));
+            data.put("VERSION DATE", extractLineValue(fullText, "VERSION DATE:"));
             data.put("SUB DIVISION", extractLineValue(fullText, "SUB DIVISION:"));
             data.put("DEPARTMENT", extractLineValue(fullText, "DEPARTMENT NAME:"));
             data.put("LOCATION", extractLineValue(fullText, "LOCATION(S):"));
