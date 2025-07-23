@@ -42,7 +42,7 @@ public class PdfExtractor {
             data.put("JOB TITLE", extractLineValue(fullText, "JOB TITLE:"));
             data.put("REPORTS TO", extractLineValue(fullText, "REPORTS TO:"));
             data.put("DIVISION", extractLineValue(fullText, "DIVISION/BUSINESS LINE:"));
-            data.put("VERSION DATE", extractLineValue(fullText, "SUB DIVISION:"));
+            data.put("VERSION DATE", extractLineValue(fullText, "VERSION DATE:"));
             data.put("SUB DIVISION", extractLineValue(fullText, "SUB DIVISION:"));
             data.put("DEPARTMENT", extractLineValue(fullText, "DEPARTMENT NAME:"));
             data.put("LOCATION", extractLineValue(fullText, "LOCATION(S):"));
@@ -375,10 +375,10 @@ public class PdfExtractor {
                 if (clean.matches("^[A-Z].*:\\s*$")) {
                     // flush current bullet if any
                     if (currentBullet.length() > 0) {
-                        result.append("• ").append(currentBullet.toString().trim()).append("\n");
+                        result.append("> ").append(currentBullet.toString().trim()).append("\n");
                         currentBullet.setLength(0);
                     }
-                    result.append("\n🔸 ").append(clean.replace(":", "").trim().toUpperCase()).append("\n");
+                    result.append("\n ").append(clean.replace(":", "").trim().toUpperCase()).append("\n");
                     bulletFound = false;
                     continue;
                 }
@@ -388,7 +388,7 @@ public class PdfExtractor {
                     bulletFound = true;
                     subBulletDetected = false;
                     if (currentBullet.length() > 0) {
-                        result.append("• ").append(currentBullet.toString().trim()).append("\n");
+                        result.append("> ").append(currentBullet.toString().trim()).append("\n");
                         currentBullet.setLength(0);
                     }
                     clean = clean.replaceFirst("^[•\\-–\\s]+", "");
@@ -398,11 +398,11 @@ public class PdfExtractor {
                 // 🔸 Detect sub-bullet (e.g., o, ▪)
                 else if (clean.matches("^[o▪→]\\s+.*")) {
                     if (currentBullet.length() > 0) {
-                        result.append("• ").append(currentBullet.toString().trim()).append("\n");
+                        result.append("> ").append(currentBullet.toString().trim()).append("\n");
                         currentBullet.setLength(0);
                     }
                     clean = clean.replaceFirst("^[o▪→\\s]+", "");
-                    result.append("   ◦ ").append(clean.trim()).append("\n");
+                    result.append("   * ").append(clean.trim()).append("\n");
                     subBulletDetected = true;
                 }
 
@@ -419,7 +419,7 @@ public class PdfExtractor {
 
             // Flush final bullet
             if (currentBullet.length() > 0) {
-                result.append("• ").append(currentBullet.toString().trim());
+                result.append("> ").append(currentBullet.toString().trim());
             }
 
         } else {
