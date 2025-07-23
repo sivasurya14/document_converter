@@ -292,6 +292,7 @@ public class PdfExtractor {
 //        } else {
 //            logger.warn("⚠️ Section not found: {} to {}", startHeader, endHeader);
 //        }
+
 //
 //        return result.toString().trim();
 //    }
