@@ -41,23 +41,39 @@ public class PdfExtractor {
             // ✅ Extract key-value fields
             data.put("JOB TITLE", extractLineValue(fullText, "JOB TITLE:"));
             data.put("REPORTS TO", extractLineValue(fullText, "REPORTS TO:"));
+            data.put("Date Completed/Reviewed","");
             data.put("DIVISION", extractLineValue(fullText, "DIVISION/BUSINESS LINE:"));
             data.put("VERSION DATE", extractLineValue(fullText, "VERSION DATE:"));
             data.put("SUB DIVISION", extractLineValue(fullText, "SUB DIVISION:"));
             data.put("DEPARTMENT", extractLineValue(fullText, "DEPARTMENT NAME:"));
+            data.put("APPROVAL FROM SITE LEADERSHIP","");
             data.put("LOCATION", extractLineValue(fullText, "LOCATION(S):"));
+            data.put("Predicted Grade(s)","");
+            data.put("Job Profile","");
+            data.put("GLOBAL JOB STRUCTURE ATTRIBUTES","");
+            data.put("GLOBAL JOB LEVEL","");
 
             // ✅ Extract sections with subheadings
             data.put("JOB SUMMARY", extractBulletsOrPlainSection(fullText, "JOB SUMMARY", "JOB RESPONSIBILITIES"));
             data.put("RESPONSIBILITIES", extractBulletsOrPlainSection(fullText, "JOB RESPONSIBILITIES", "QUALIFICATIONS / SKILLS"));
-            data.put("QUALIFICATIONS", extractBulletsOrPlainSection(fullText, "QUALIFICATIONS / SKILLS", "ORGANIZATIONAL RELATIONSHIPS"));
+            data.put("Additional Job Responsibilities","");
+
+            String qualifications = extractBulletsOrPlainSection(fullText, "QUALIFICATIONS / SKILLS", "ORGANIZATIONAL RELATIONSHIPS");
+            data.put("QUALIFICATIONS", qualifications);
+            data.put("Preferred Qualifications", extractPreferredFromQualifications(qualifications));
+
+//            data.put("QUALIFICATIONS", extractBulletsOrPlainSection(fullText, "QUALIFICATIONS / SKILLS", "ORGANIZATIONAL RELATIONSHIPS"));
 //            data.put("NON-STANDARD WORK", extractBulletsOrPlainSection(fullText,
-//                    "NON-STANDARD WORK SCHEDULE, TRAVEL OR ENVIRONMENT REQUIREMENTS", "ORGANIZATIONAL RELATIONSHIPS"));
+//                   "NON-STANDARD WORK SCHEDULE, TRAVEL OR ENVIRONMENT REQUIREMENTS", "ORGANIZATIONAL RELATIONSHIPS"));
+//            data.put("Preferred Qualifications","");
+
+            data.put("PHYSICAL/MENTAL REQUIREMENTS","");
 
             data.put("NON-STANDARD WORK", extractBulletsOrPlainSection(fullText,
                     "NON-STANDARD WORK SCHEDULE, TRAVEL OR ENVIRONMENT REQUIREMENTS",
                     "ORGANIZATIONAL RELATIONSHIPS"));
 
+            data.put("OTHER INFORMATION","");
 
             data.put("ORGANIZATIONAL RELATIONSHIPS", extractBulletsOrPlainSection(fullText, "ORGANIZATIONAL RELATIONSHIPS", "RESOURCES MANAGED"));
 
@@ -87,8 +103,12 @@ public class PdfExtractor {
     }
 
 
-    private static String extractBulletsWithHeader(String text, String startHeader, String endHeader) {
+
+    private static String extractBulletsOrPlainSection(String text, String startHeader, String endHeader) {
         String pattern;
+
+
+
         if (endHeader == null || endHeader.isEmpty()) {
             pattern = "(?i)" + Pattern.quote(startHeader) + "\\s*\\n?(.+)$";
         } else {
@@ -100,50 +120,116 @@ public class PdfExtractor {
 
         if (matcher.find()) {
             String raw = matcher.group(1).trim();
-
             String[] lines = raw.split("\\r?\\n");
 
-           // result.append(startHeader.toUpperCase()).append("\n");
-
             StringBuilder currentBullet = new StringBuilder();
+            boolean bulletFound = false;
+            boolean subBulletDetected = false;
+
+            List<Pattern> instructionPatterns = Arrays.asList(
+                    // 🟨 JOB SUMMARY
+                    Pattern.compile("(?i)^\\s*summarize the primary purpose.*"),
+
+                    // 🟧 JOB RESPONSIBILITIES
+                    Pattern.compile("(?i)^\\s*indicate the primary responsibilities.*"),
+
+                    // 🟩 QUALIFICATIONS / SKILLS
+                    Pattern.compile("(?i)^\\s*indicate qualifications and skills.*"),
+                    Pattern.compile("(?i)^\\s*licenses, certifications.*"),
+
+                    // 🟦 ORGANIZATIONAL RELATIONSHIPS
+                    Pattern.compile("(?i)^\\s*provide the primary groups.*"),
+                    Pattern.compile("(?i)^\\s*include any external interactions.*"),
+
+                    // 🟥 RESOURCES MANAGED
+                    Pattern.compile("(?i)^\\s*summary of resources managed.*"),
+
+                    // ✅ Generic fallback (optional)
+                    Pattern.compile("(?i)^\\s*this section describes.*"),
+                    Pattern.compile("(?i)^\\s*describe required knowledge.*"),
+                    Pattern.compile("(?i)^\\s*provide a brief overview.*"),
+
+                    Pattern.compile("(?i)^\\s*\\(not all roles will have non-standard work schedule.*"),
+                    Pattern.compile("(?i)^\\s*include any work schedule, travel.*"),
+                    Pattern.compile("(?i)^\\s*types of requirements.*"),
+                    Pattern.compile("(?i)^\\s*any criteria indicated must be job-related.*")
+
+            );
 
             for (String line : lines) {
                 String clean = line.trim();
 
-                // Skip known junk
-                if (clean.matches("(?i)^.*(Pfizer Confidential|Approved On|JOB DESCRIPTION|Page \\d+ of \\d+|^\\d{4,}\\\\.*)$") || clean.length() < 2) {
+
+                // 🚫 Universal unwanted lines
+                if (clean.matches("(?i)^.*(approved|GMT|Pfizer Confidential|JOB DESCRIPTION|Page \\d+ of \\d+).*") || clean.length() < 3) {
                     continue;
                 }
 
-                // Check if the line is a subheading (like "Implementation Leadership:")
-                if (clean.matches("^[A-Z][A-Za-z\\s&]+:$")) {
-                    // Flush previous bullet if present
-                    if (currentBullet.length() > 0) {
-                        result.append("• ").append(currentBullet.toString().trim()).append("\n");
-                        currentBullet.setLength(0);
-                    }
+//                // 🚫 Instructional phrases (section-specific patterns)
+//                if (clean.matches("(?i)^\\s*(summary of|provide the primary groups|include any external|key role\\(s\\)|this role is responsible for|n/a).*")) {
+//                    logger.debug("🟡 Skipping instruction: {}", clean);
+//                    continue;
+//                }
 
-                    // Append subheading in uppercase
-                    result.append(clean.toUpperCase()).append("\n");
+                String finalClean = clean;
+                boolean isInstruction = instructionPatterns.stream().anyMatch(p -> p.matcher(finalClean).find());
+                if (isInstruction) {
+                    logger.info("🟡 Skipping instruction: {}", clean);
                     continue;
                 }
 
-                // If it's a bullet point
-                if (clean.startsWith("•") || clean.startsWith("")) {
-                    if (currentBullet.length() > 0) {
-                        result.append("• ").append(currentBullet.toString().trim()).append("\n");
+
+                // 🔹 Subheading inside bullet (e.g., "Implementation Leadership:")
+                if (clean.matches("^[A-Z].*:\\s*$")) {
+                    // flush current bullet if any
+                    if (!currentBullet.isEmpty()) {
+                        result.append("> ").append(currentBullet.toString().trim()).append("\n");
                         currentBullet.setLength(0);
                     }
-                    clean = clean.replaceFirst("^[•\\s]+", "");
+                    result.append("\n ").append(clean.replace(":", "").trim().toUpperCase()).append("\n");
+                    bulletFound = false;
+                    continue;
+                }
+
+                // 🔹 Detect main bullet
+                if (clean.startsWith("•") || clean.startsWith("") || clean.matches("^[\\-–].+")) {
+                    bulletFound = true;
+                    subBulletDetected = false;
+                    if (!currentBullet.isEmpty()) {
+                        result.append("> ").append(currentBullet.toString().trim()).append("\n");
+                        currentBullet.setLength(0);
+                    }
+                    clean = clean.replaceFirst("^[•\\-–\\s]+", "");
                     currentBullet.append(clean).append(" ");
-                } else if (currentBullet.length() > 0) {
+                }
+
+                // 🔸 Detect sub-bullet (e.g., o, ▪)
+                else if (clean.matches("^[o▪→]\\s+.*")) {
+                    if (!currentBullet.isEmpty()) {
+                        result.append("> ").append(currentBullet.toString().trim()).append("\n");
+                        currentBullet.setLength(0);
+                    }
+                    clean = clean.replaceFirst("^[o▪→\\s]+", "");
+                    result.append("   * ").append(clean.trim()).append("\n");
+                    subBulletDetected = true;
+                }
+
+                // 🔄 Continuation of bullet
+                else if (bulletFound && !subBulletDetected && currentBullet.length() > 0) {
                     currentBullet.append(clean).append(" ");
+                }
+
+                // 📄 Plain sentence
+                else if (!bulletFound && !clean.isEmpty()) {
+                    result.append(clean).append("\n");
                 }
             }
 
-            if (currentBullet.length() > 0) {
-                result.append("• ").append(currentBullet.toString().trim());
+            // Flush final bullet
+            if (!currentBullet.isEmpty()) {
+                result.append("> ").append(currentBullet.toString().trim());
             }
+
         } else {
             logger.warn("⚠️ Section not found: {} to {}", startHeader, endHeader);
         }
@@ -151,7 +237,45 @@ public class PdfExtractor {
         return result.toString().trim();
     }
 
-//    private static String extractBulletsOrPlainSection(String text, String startHeader, String endHeader) {
+    private static String extractPreferredFromQualifications(String qualificationsSection) {
+        StringBuilder preferred = new StringBuilder();
+        boolean inPreferred = false;
+
+        String[] lines = qualificationsSection.split("\\r?\\n");
+
+        for (String line : lines) {
+            String trimmed = line.trim();
+
+            // ✅ Detect if PREFERRED QUALIFICATIONS appears mid-line
+            if (!inPreferred && trimmed.toUpperCase().contains("PREFERRED QUALIFICATIONS")) {
+                inPreferred = true;
+
+                // Split line on header and keep only the content after the header (if any)
+                String[] parts = trimmed.split("(?i)PREFERRED QUALIFICATIONS");
+                if (parts.length > 1 && !parts[1].trim().isEmpty()) {
+                    preferred.append(parts[1].trim()).append("\n");
+                }
+
+                continue;
+            }
+
+            // ✅ End on next section header (e.g. PHYSICAL/MENTAL REQUIREMENTS)
+            if (inPreferred && trimmed.matches("^[A-Z][A-Z /]{3,}$")) {
+                break;
+            }
+
+            if (inPreferred) {
+                preferred.append(trimmed).append("\n");
+            }
+        }
+
+        return preferred.toString().trim();
+    }
+
+
+
+
+    //    private static String extractBulletsOrPlainSection(String text, String startHeader, String endHeader) {
 //        String pattern;
 //        if (endHeader == null || endHeader.isEmpty()) {
 //            pattern = "(?i)" + Pattern.quote(startHeader) + "\\s*\\n?(.+)$";
@@ -297,138 +421,69 @@ public class PdfExtractor {
 //        return result.toString().trim();
 //    }
 
-    private static String extractBulletsOrPlainSection(String text, String startHeader, String endHeader) {
-        String pattern;
 
-
-
-        if (endHeader == null || endHeader.isEmpty()) {
-            pattern = "(?i)" + Pattern.quote(startHeader) + "\\s*\\n?(.+)$";
-        } else {
-            pattern = "(?i)" + Pattern.quote(startHeader) + "\\s*\\n?(.+?)\\s*(?=" + Pattern.quote(endHeader) + ")";
-        }
-
-        Matcher matcher = Pattern.compile(pattern, Pattern.DOTALL).matcher(text);
-        StringBuilder result = new StringBuilder();
-
-        if (matcher.find()) {
-            String raw = matcher.group(1).trim();
-            String[] lines = raw.split("\\r?\\n");
-
-            StringBuilder currentBullet = new StringBuilder();
-            boolean bulletFound = false;
-            boolean subBulletDetected = false;
-
-            List<Pattern> instructionPatterns = Arrays.asList(
-                    // 🟨 JOB SUMMARY
-                    Pattern.compile("(?i)^\\s*summarize the primary purpose.*"),
-
-                    // 🟧 JOB RESPONSIBILITIES
-                    Pattern.compile("(?i)^\\s*indicate the primary responsibilities.*"),
-
-                    // 🟩 QUALIFICATIONS / SKILLS
-                    Pattern.compile("(?i)^\\s*indicate qualifications and skills.*"),
-                    Pattern.compile("(?i)^\\s*licenses, certifications.*"),
-
-                    // 🟦 ORGANIZATIONAL RELATIONSHIPS
-                    Pattern.compile("(?i)^\\s*provide the primary groups.*"),
-                    Pattern.compile("(?i)^\\s*include any external interactions.*"),
-
-                    // 🟥 RESOURCES MANAGED
-                    Pattern.compile("(?i)^\\s*summary of resources managed.*"),
-
-                    // ✅ Generic fallback (optional)
-                    Pattern.compile("(?i)^\\s*this section describes.*"),
-                    Pattern.compile("(?i)^\\s*describe required knowledge.*"),
-                    Pattern.compile("(?i)^\\s*provide a brief overview.*"),
-
-                    Pattern.compile("(?i)^\\s*\\(not all roles will have non-standard work schedule.*"),
-                    Pattern.compile("(?i)^\\s*include any work schedule, travel.*"),
-                    Pattern.compile("(?i)^\\s*types of requirements.*"),
-                    Pattern.compile("(?i)^\\s*any criteria indicated must be job-related.*")
-
-            );
-
-            for (String line : lines) {
-                String clean = line.trim();
-
-
-                // 🚫 Universal unwanted lines
-                if (clean.matches("(?i)^.*(approved|GMT|Pfizer Confidential|JOB DESCRIPTION|Page \\d+ of \\d+).*") || clean.length() < 3) {
-                    continue;
-                }
-
-//                // 🚫 Instructional phrases (section-specific patterns)
-//                if (clean.matches("(?i)^\\s*(summary of|provide the primary groups|include any external|key role\\(s\\)|this role is responsible for|n/a).*")) {
-//                    logger.debug("🟡 Skipping instruction: {}", clean);
+//    private static String extractBulletsWithHeader(String text, String startHeader, String endHeader) {
+//        String pattern;
+//        if (endHeader == null || endHeader.isEmpty()) {
+//            pattern = "(?i)" + Pattern.quote(startHeader) + "\\s*\\n?(.+)$";
+//        } else {
+//            pattern = "(?i)" + Pattern.quote(startHeader) + "\\s*\\n?(.+?)\\s*(?=" + Pattern.quote(endHeader) + ")";
+//        }
+//
+//        Matcher matcher = Pattern.compile(pattern, Pattern.DOTALL).matcher(text);
+//        StringBuilder result = new StringBuilder();
+//
+//        if (matcher.find()) {
+//            String raw = matcher.group(1).trim();
+//
+//            String[] lines = raw.split("\\r?\\n");
+//
+//            // result.append(startHeader.toUpperCase()).append("\n");
+//
+//            StringBuilder currentBullet = new StringBuilder();
+//
+//            for (String line : lines) {
+//                String clean = line.trim();
+//
+//                // Skip known junk
+//                if (clean.matches("(?i)^.*(Pfizer Confidential|Approved On|JOB DESCRIPTION|Page \\d+ of \\d+|^\\d{4,}\\\\.*)$") || clean.length() < 2) {
 //                    continue;
 //                }
-
-                String finalClean = clean;
-                boolean isInstruction = instructionPatterns.stream().anyMatch(p -> p.matcher(finalClean).find());
-                if (isInstruction) {
-                    logger.info("🟡 Skipping instruction: {}", clean);
-                    continue;
-                }
-
-
-                // 🔹 Subheading inside bullet (e.g., "Implementation Leadership:")
-                if (clean.matches("^[A-Z].*:\\s*$")) {
-                    // flush current bullet if any
-                    if (currentBullet.length() > 0) {
-                        result.append("> ").append(currentBullet.toString().trim()).append("\n");
-                        currentBullet.setLength(0);
-                    }
-                    result.append("\n ").append(clean.replace(":", "").trim().toUpperCase()).append("\n");
-                    bulletFound = false;
-                    continue;
-                }
-
-                // 🔹 Detect main bullet
-                if (clean.startsWith("•") || clean.startsWith("") || clean.matches("^[\\-–].+")) {
-                    bulletFound = true;
-                    subBulletDetected = false;
-                    if (currentBullet.length() > 0) {
-                        result.append("> ").append(currentBullet.toString().trim()).append("\n");
-                        currentBullet.setLength(0);
-                    }
-                    clean = clean.replaceFirst("^[•\\-–\\s]+", "");
-                    currentBullet.append(clean).append(" ");
-                }
-
-                // 🔸 Detect sub-bullet (e.g., o, ▪)
-                else if (clean.matches("^[o▪→]\\s+.*")) {
-                    if (currentBullet.length() > 0) {
-                        result.append("> ").append(currentBullet.toString().trim()).append("\n");
-                        currentBullet.setLength(0);
-                    }
-                    clean = clean.replaceFirst("^[o▪→\\s]+", "");
-                    result.append("   * ").append(clean.trim()).append("\n");
-                    subBulletDetected = true;
-                }
-
-                // 🔄 Continuation of bullet
-                else if (bulletFound && !subBulletDetected && currentBullet.length() > 0) {
-                    currentBullet.append(clean).append(" ");
-                }
-
-                // 📄 Plain sentence
-                else if (!bulletFound && clean.length() > 0) {
-                    result.append(clean).append("\n");
-                }
-            }
-
-            // Flush final bullet
-            if (currentBullet.length() > 0) {
-                result.append("> ").append(currentBullet.toString().trim());
-            }
-
-        } else {
-            logger.warn("⚠️ Section not found: {} to {}", startHeader, endHeader);
-        }
-
-        return result.toString().trim();
-    }
-
+//
+//                // Check if the line is a subheading (like "Implementation Leadership:")
+//                if (clean.matches("^[A-Z][A-Za-z\\s&]+:$")) {
+//                    // Flush previous bullet if present
+//                    if (currentBullet.length() > 0) {
+//                        result.append("• ").append(currentBullet.toString().trim()).append("\n");
+//                        currentBullet.setLength(0);
+//                    }
+//
+//                    // Append subheading in uppercase
+//                    result.append(clean.toUpperCase()).append("\n");
+//                    continue;
+//                }
+//
+//                // If it's a bullet point
+//                if (clean.startsWith("•") || clean.startsWith("")) {
+//                    if (currentBullet.length() > 0) {
+//                        result.append("• ").append(currentBullet.toString().trim()).append("\n");
+//                        currentBullet.setLength(0);
+//                    }
+//                    clean = clean.replaceFirst("^[•\\s]+", "");
+//                    currentBullet.append(clean).append(" ");
+//                } else if (currentBullet.length() > 0) {
+//                    currentBullet.append(clean).append(" ");
+//                }
+//            }
+//
+//            if (currentBullet.length() > 0) {
+//                result.append("• ").append(currentBullet.toString().trim());
+//            }
+//        } else {
+//            logger.warn("⚠️ Section not found: {} to {}", startHeader, endHeader);
+//        }
+//
+//        return result.toString().trim();
+//    }
 
 }
